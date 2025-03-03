@@ -137,7 +137,7 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
     const speed = calculateSpeed(prevLat, prevLng, prevTimestamp, latitude, longitude);
 
     // Check for nearest stop
-    const THRESHOLD_DISTANCE = 0.05; // 50 meters
+    const THRESHOLD_DISTANCE = 0.001; // 50 meters
     const passedStop = stops.find(stop => {
       return haversineDistance(latitude, longitude, stop.coordinates.lat, stop.coordinates.lng) < THRESHOLD_DISTANCE;
     });
