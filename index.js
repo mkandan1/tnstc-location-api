@@ -101,40 +101,54 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
     if (!scheduledBus) throw new Error("Scheduled bus not found");
 
     const { location, distanceTravelled = 0, route } = scheduledBus;
-    if (!route || !route.origin || !route.destination) {
-      throw new Error("Route data is invalid or missing origin/destination");
+    if (!route || !route.origin || !route.destination || !route.totalDistance) {
+      throw new Error("Route data is invalid or missing required details");
     }
 
     const prevLat = location?.latitude;
     const prevLng = location?.longitude;
     const prevTimestamp = location.lastUpdated ? new Date(location.lastUpdated).getTime() : null;
 
+    // Calculate distance moved using haversine formula
     let distanceIncrement = 0;
     if (prevLat && prevLng) {
       distanceIncrement = haversineDistance(prevLat, prevLng, latitude, longitude);
     }
 
-    const newDistanceTravelled = distanceTravelled + distanceIncrement;
+    // **Fix 1: Use the total planned route distance instead of accumulated small distances**
+    const newDistanceTravelled = Math.min(distanceTravelled + distanceIncrement, route.totalDistance);
 
-    // Get destination coordinates
-    const destination = await BusStop.findById(route.destination);
-    if (!destination || !destination.coordinates.lat || !destination.coordinates.lng) {
-      throw new Error("Destination coordinates are missing");
+    // **Fix 2: Calculate remaining distance using route stops**
+    const stops = await BusStop.find({ _id: { $in: route.stops } }).sort("order");
+    let remainingDistance = 0;
+
+    for (let i = 0; i < stops.length - 1; i++) {
+      const stop = stops[i];
+      const nextStop = stops[i + 1];
+
+      if (haversineDistance(latitude, longitude, stop.coordinates.lat, stop.coordinates.lng) < 
+          haversineDistance(latitude, longitude, nextStop.coordinates.lat, nextStop.coordinates.lng)) {
+        // If the bus is between this stop and the next one, sum remaining distance
+        for (let j = i + 1; j < stops.length; j++) {
+          remainingDistance += haversineDistance(
+            stops[j - 1].coordinates.lat,
+            stops[j - 1].coordinates.lng,
+            stops[j].coordinates.lat,
+            stops[j].coordinates.lng
+          );
+        }
+        break;
+      }
     }
 
-    // Calculate remaining distance to the destination
-    let remainingDistance = haversineDistance(latitude, longitude, destination.coordinates.lat, destination.coordinates.lng);
-    if (isNaN(remainingDistance) || remainingDistance < 0) {
-      remainingDistance = 0;
-    }
+    // Ensure remaining distance is never negative
+    remainingDistance = Math.max(remainingDistance, 0);
 
-    // Calculate completion percentage dynamically
-    let completionPercentage = (newDistanceTravelled / (newDistanceTravelled + remainingDistance)) * 100;
-    console.log(completionPercentage)
-    if (isNaN(completionPercentage) || completionPercentage < 0) {
-      completionPercentage = 0;
-    }
+    // **Fix 3: Calculate completion percentage correctly**
+    let completionPercentage = (newDistanceTravelled / route.totalDistance) * 100;
+    completionPercentage = Math.max(0, Math.min(completionPercentage, 100));
 
+    // Calculate speed
     const speed = calculateSpeed(prevLat, prevLng, prevTimestamp, latitude, longitude);
 
     const updateFields = {
@@ -156,4 +170,5 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
     throw new Error("Error updating bus location");
   }
 };
+
 
