@@ -4,6 +4,7 @@ import http from "http";
 import ScheduledBus from "./model/scheduledbus.model.js";
 import { haversineDistance, calculateSpeed } from "./utils/time.js";
 import dotenv from "dotenv";
+import BusStop from "./model/stops.model.js";
 import connectDB from "./database.js";
 
 const app = express();
