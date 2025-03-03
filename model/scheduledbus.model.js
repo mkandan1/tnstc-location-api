@@ -49,6 +49,17 @@ const scheduledBusSchema = new Schema(
     journeyCompletion: {
       type: Number
     },
+    leftAt: [
+          {
+            stop: {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: 'BusStop',
+            },
+            time: {
+              type: Date,
+            }
+          }
+        ],
     status: {
       type: String,
       enum: ['Scheduled', 'On Route', 'Completed', 'Cancelled'],
