@@ -200,7 +200,7 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
 
     const updatedBus = await ScheduledBus.findByIdAndUpdate(
       scheduledBusId,
-      { $set: updateFields, $push: { leftAt: { $each: passedStops.map(stop => ({ stop: stop._id, time: new Date() })) } } },
+      { $set: updateFields, $push: { leftAt: { $each: passedStop.map(stop => ({ stop: stop._id, time: new Date() })) } } },
       { new: true }
     );
 
