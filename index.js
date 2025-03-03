@@ -172,23 +172,23 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
 
     if (speed !== null) updateFields.speed = speed;
 
-    // Check if the bus passed any new stops
+    const THRESHOLD_DISTANCE = 0.1; // 100 meters
+    const MIN_TIME_GAP = 60 * 1000; // 1 minute (adjust as needed)
+
     const passedStops = stops.filter(stop => {
       const distanceToStop = haversineDistance(latitude, longitude, stop.coordinates.lat, stop.coordinates.lng);
-      return distanceToStop < 0.1; // If the bus is very close to the stop (adjust threshold as needed)
+      return distanceToStop < THRESHOLD_DISTANCE;
     });
 
     passedStops.forEach(stop => {
-      // Check if the stop hasn't already been marked as left
-      const stopAlreadyLeft = scheduledBus.leftAt.some(item => item.stop.toString() === stop._id.toString());
-      if (!stopAlreadyLeft) {
-        // Add to leftAt with current time
-        scheduledBus.leftAt.push({
-          stop: stop._id,
-          time: new Date(),
-        });
+      const lastLeftEntry = scheduledBus.leftAt.find(item => item.stop.toString() === stop._id.toString());
+      const now = new Date();
+
+      if (!lastLeftEntry || now - new Date(lastLeftEntry.time) > MIN_TIME_GAP) {
+        scheduledBus.leftAt.push({ stop: stop._id, time: now });
       }
     });
+
 
     const updatedBus = await ScheduledBus.findByIdAndUpdate(
       scheduledBusId,
