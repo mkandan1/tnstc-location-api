@@ -142,7 +142,7 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
       "location.lastUpdated": new Date(),
       distanceTraveled: newDistanceTravelled.toFixed(2),
       distanceRemaining: remainingDistance.toFixed(2),
-      journeyCompletion: completionPercentage.toFixed(2),
+      journeyCompletion: completionPercentage.toFixed(2) + scheduledBus.journeyCompletion < 100 ? completionPercentage.toFixed(2) + scheduledBus.journeyCompletion : 100,
     };
 
     if (speed !== null) updateFields.speed = speed;
