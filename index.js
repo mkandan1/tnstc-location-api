@@ -130,6 +130,7 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
 
     // Calculate completion percentage dynamically
     let completionPercentage = (newDistanceTravelled / (newDistanceTravelled + remainingDistance)) * 100;
+    console.log(completionPercentage)
     if (isNaN(completionPercentage) || completionPercentage < 0) {
       completionPercentage = 0;
     }
@@ -142,7 +143,7 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
       "location.lastUpdated": new Date(),
       distanceTraveled: newDistanceTravelled.toFixed(2),
       distanceRemaining: remainingDistance.toFixed(2),
-      journeyCompletion: completionPercentage.toFixed(2) + scheduledBus.journeyCompletion < 100 ? completionPercentage.toFixed(2) + scheduledBus.journeyCompletion : 100,
+      journeyCompletion: completionPercentage.toFixed(2),
     };
 
     if (speed !== null) updateFields.speed = speed;
