@@ -100,8 +100,8 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
     if (!scheduledBus) throw new Error("Scheduled bus not found");
 
     const { location, distanceTravelled = 0, route } = scheduledBus;
-    if (!route || !route.totalDistance || isNaN(route.totalDistance)) {
-      throw new Error("Route data is invalid or missing total distance");
+    if (!route || !route.origin || !route.destination) {
+      throw new Error("Route data is invalid or missing origin/destination");
     }
 
     const prevLat = location?.latitude;
@@ -115,14 +115,20 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
 
     const newDistanceTravelled = distanceTravelled + distanceIncrement;
 
-    // Ensure remaining distance is not NaN
-    let remainingDistance = route.totalDistance - newDistanceTravelled;
+    // Get destination coordinates
+    const destination = await BusStop.findById(route.destination);
+    if (!destination || !destination.coordinates.lat || !destination.coordinates.lng) {
+      throw new Error("Destination coordinates are missing");
+    }
+
+    // Calculate remaining distance to the destination
+    let remainingDistance = haversineDistance(latitude, longitude, destination.coordinates.lat, destination.coordinates.lng);
     if (isNaN(remainingDistance) || remainingDistance < 0) {
       remainingDistance = 0;
     }
 
-    // Ensure completion percentage is not NaN
-    let completionPercentage = (newDistanceTravelled * 100) / route.totalDistance;
+    // Calculate completion percentage dynamically
+    let completionPercentage = (newDistanceTravelled / (newDistanceTravelled + remainingDistance)) * 100;
     if (isNaN(completionPercentage) || completionPercentage < 0) {
       completionPercentage = 0;
     }
@@ -148,3 +154,4 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
     throw new Error("Error updating bus location");
   }
 };
+
