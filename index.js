@@ -101,66 +101,62 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
       .populate({
         path: 'route',
         populate: [
-          {
-            path: 'origin', // Populating the origin field in the route
-            model: 'BusStop' // Make sure 'BusStop' matches the name of your BusStop model
-          },
-          {
-            path: 'destination', // Populating the destination field in the route
-            model: 'BusStop' // Make sure 'BusStop' matches the name of your BusStop model
-          }
+          { path: 'origin', model: 'BusStop' },
+          { path: 'destination', model: 'BusStop' }
         ]
       });
+
     if (!scheduledBus) throw new Error("Scheduled bus not found");
 
-    const { location, route } = scheduledBus;
+    const { location, route, leftAt = [] } = scheduledBus;
     if (!route || !route.origin || !route.destination || !route.stops || !route.totalDistance) {
       throw new Error("Route data is invalid or missing required details");
     }
 
     const stops = await BusStop.find({ '_id': { $in: route.stops.map(stop => stop.stopId) } });
-    if (!stops || stops.length === 0) {
-      throw new Error("No stops found for this route");
-    }
-    // Verify that the route origin and destination have valid coordinates
-    if (!route.origin.coordinates || !route.origin.coordinates.lat || !route.origin.coordinates.lng) {
-      throw new Error("Origin coordinates are missing or invalid");
-    }
-    if (!route.destination.coordinates || !route.destination.coordinates.lat || !route.destination.coordinates.lng) {
-      throw new Error("Destination coordinates are missing or invalid");
-    }
+    if (!stops.length) throw new Error("No stops found for this route");
 
     const prevLat = location?.latitude;
     const prevLng = location?.longitude;
     const prevTimestamp = location.lastUpdated ? new Date(location.lastUpdated).getTime() : null;
 
-    // Step 1: Calculate Distance from Origin to Current Location
+    // Distance calculations
     const distanceFromOrigin = haversineDistance(
-      route.origin.coordinates.lat,
-      route.origin.coordinates.lng,
-      latitude,
-      longitude
+      route.origin.coordinates.lat, route.origin.coordinates.lng, latitude, longitude
     );
 
-    // Step 2: Calculate Remaining Distance to Destination
     let remainingDistance = haversineDistance(
-      latitude,
-      longitude,
-      route.destination.coordinates.lat,
-      route.destination.coordinates.lng
+      latitude, longitude, route.destination.coordinates.lat, route.destination.coordinates.lng
     );
 
-    // Step 3: Calculate Completion Percentage
     let completionPercentage = (distanceFromOrigin / route.totalDistance) * 100;
-
-    // Ensure values are within valid range
     remainingDistance = Math.max(remainingDistance, 0);
     completionPercentage = Math.max(0, Math.min(completionPercentage, 100));
 
-    // Step 4: Calculate Speed
+    // Speed calculation
     const speed = calculateSpeed(prevLat, prevLng, prevTimestamp, latitude, longitude);
 
-    // Step 5: Update Database
+    // Check for nearest stop
+    const THRESHOLD_DISTANCE = 0.05; // 50 meters
+    const passedStop = stops.find(stop => {
+      return haversineDistance(latitude, longitude, stop.coordinates.lat, stop.coordinates.lng) < THRESHOLD_DISTANCE;
+    });
+
+    if (passedStop) {
+      const stopId = passedStop._id;
+
+      // Ensure stop is not already recorded
+      const alreadyRecorded = leftAt.some(entry => entry.stop.toString() === stopId.toString());
+
+      if (!alreadyRecorded) {
+        leftAt.push({
+          stop: stopId,
+          time: new Date()
+        });
+      }
+    }
+
+    // Prepare update fields
     const updateFields = {
       "location.latitude": latitude,
       "location.longitude": longitude,
@@ -168,39 +164,14 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
       distanceTraveled: distanceFromOrigin.toFixed(2),
       distanceRemaining: remainingDistance.toFixed(2),
       journeyCompletion: completionPercentage.toFixed(2),
+      leftAt
     };
 
     if (speed !== null) updateFields.speed = speed;
 
-    const THRESHOLD_DISTANCE = 0.5; // 100 meters
-
-    if (!busData.leftAt) {
-      busData.leftAt = [];
-  }
-
-  // Find the closest stop within threshold
-  const passedStop = stops.find(stop => {
-      const distanceToStop = haversineDistance(latitude, longitude, stop.coordinates.lat, stop.coordinates.lng);
-      return distanceToStop < THRESHOLD_DISTANCE;
-  });
-
-  if (passedStop) {
-      const stopId = passedStop._id; // Assuming stops have an `_id` field
-
-      const alreadyRecorded = busData.leftAt.some(entry => entry.stop.$oid === stopId);
-
-      if (!alreadyRecorded) {
-          busData.leftAt.push({
-              stop: { "$oid": stopId },
-              time: { "$date": new Date() },
-          });
-      }
-  }
-
-
     const updatedBus = await ScheduledBus.findByIdAndUpdate(
       scheduledBusId,
-      { $set: updateFields, $push: { leftAt: { $each: passedStop.map(stop => ({ stop: stop._id, time: new Date() })) } } },
+      { $set: updateFields },
       { new: true }
     );
 
@@ -210,3 +181,4 @@ const updateBusLocation = async (scheduledBusId, latitude, longitude) => {
     throw new Error("Error updating bus location");
   }
 };
+
