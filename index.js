@@ -90,6 +90,39 @@ wss.on("connection", (ws) => {
   });
 });
 
+const broadcastAnnouncements = async () => {
+  try {
+    const buses = await ScheduledBus.find({ status: "On Route" }).populate("bus route");
+    const stops = await BusStop.find();
+
+    if (buses.length === 0) return;
+
+    let announcementMessage = `📢 பயணிகளின் கவனத்திற்கு!`;
+
+    buses.forEach((bus) => {
+      const nearestStop = stops.find(stop =>
+        haversineDistance(bus.location.latitude, bus.location.longitude, stop.coordinates.lat, stop.coordinates.lng) < 0.05
+      );
+
+      if (nearestStop) {
+        announcementMessage += ` பஸ் ${bus.bus?.busNumber} தற்போது ${nearestStop.name} அருகில் உள்ளது.`;
+      }
+    });
+
+    console.log("🚍 Sending announcement:", announcementMessage);
+
+    wss.clients.forEach((client) => {
+      if (client.readyState === client.OPEN) {
+        client.send(JSON.stringify({ type: "announcement", message: announcementMessage }));
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error broadcasting announcement:", error);
+  }
+};
+
+// Trigger announcements every 5 minutes
+setInterval(broadcastAnnouncements, 10000);
 
 
 const PORT = process.env.PORT || 4000;
